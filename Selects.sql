@@ -79,32 +79,52 @@ FROM actor
 RIGHT JOIN customer ON actor.last_name = customer.last_name;
 
 -- 9. В одном запросе вывести статистические данные о фильмах:
--- 9.1. Длина самого продолжительного фильма – отобразить значение длины; количество фильмов, имеющих такую продолжительность.
-SELECT MAX(length) AS longest_length, COUNT(*) AS count_longest
-FROM film
-WHERE length = (SELECT MAX(length) FROM film);
-
--- 9.2. Длина самого короткого фильма – отобразить значение длины; количество фильмов, имеющих такую продолжительность.
-SELECT MIN(length) AS shortest_length, COUNT(*) AS count_shortest
-FROM film
-WHERE length = (SELECT MIN(length) FROM film);
-
--- 9.3. Максимальное количество актеров в фильме – отобразить максимальное количество актеров; количество фильмов, имеющих такое число актеров.
-SELECT max_actor_count, COUNT(*) AS count_max_actor
-FROM (
-   SELECT film.film_id, COUNT(film_actor.actor_id) AS actor_count
-   FROM film
-   JOIN film_actor ON film.film_id = film_actor.film_id
-   GROUP BY film.film_id
-) AS actor_counts
-WHERE actor_count = (SELECT MAX(actor_count) FROM actor_counts);
-
--- 9.4. Минимальное количество актеров в фильме - отобразить минимальное количество актеров; количество фильмов, имеющих такое число актеров.
-SELECT min_actor_count, COUNT(*) AS count_min_actor
-FROM (
-   SELECT film.film_id, COUNT(film_actor.actor_id) AS actor_count
-   FROM film
-   JOIN film_actor ON film.film_id = film_actor.film_id
-   GROUP BY film.film_id
-) AS actor_counts
-WHERE actor_count = (SELECT MIN(actor_count) FROM actor_counts);
+WITH FilmLengths AS (
+    SELECT 
+        MAX(length) AS MaxLength,
+        MIN(length) AS MinLength
+    FROM film
+),
+FilmLengthStats AS (
+    SELECT
+        length AS Length,
+        COUNT(*) AS FilmCount
+    FROM film
+    GROUP BY length
+),
+ActorStats AS (
+    SELECT 
+        film_id,
+        COUNT(actor_id) AS ActorCount
+    FROM film_actor
+    GROUP BY film_id
+),
+ActorStatsSummary AS (
+    SELECT 
+        MAX(ActorCount) AS MaxActors,
+        MIN(ActorCount) AS MinActors
+    FROM ActorStats
+),
+ActorStatsDetails AS (
+    SELECT 
+        ActorCount,
+        COUNT(*) AS FilmCount
+    FROM ActorStats
+    GROUP BY ActorCount
+)
+SELECT 
+    -- Самый длинный фильм
+    (SELECT MaxLength FROM FilmLengths) AS MaxLength,
+    (SELECT FilmCount FROM FilmLengthStats WHERE Length = (SELECT MaxLength FROM FilmLengths)) AS MaxLengthFilmCount,
+    
+    -- Самый короткий фильм
+    (SELECT MinLength FROM FilmLengths) AS MinLength,
+    (SELECT FilmCount FROM FilmLengthStats WHERE Length = (SELECT MinLength FROM FilmLengths)) AS MinLengthFilmCount,
+    
+    -- Максимальное количество актеров
+    (SELECT MaxActors FROM ActorStatsSummary) AS MaxActors,
+    (SELECT FilmCount FROM ActorStatsDetails WHERE ActorCount = (SELECT MaxActors FROM ActorStatsSummary)) AS MaxActorsFilmCount,
+    
+    -- Минимальное количество актеров
+    (SELECT MinActors FROM ActorStatsSummary) AS MinActors,
+    (SELECT FilmCount FROM ActorStatsDetails WHERE ActorCount = (SELECT MinActors FROM ActorStatsSummary)) AS MinActorsFilmCount;
